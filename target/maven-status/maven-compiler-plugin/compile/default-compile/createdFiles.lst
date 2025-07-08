@@ -1,0 +1,14 @@
+ExecutorServiceProcessing.class
+ForkJoinProcessing.class
+App.class
+ForkJoinProcessing$1.class
+ForkJoinProcessing$FilterTask.class
+Filters.class
+SequentialProcessing.class
+FilterType.class
+MainGUI.class
+SequentialProcessing$1.class
+ExecutorServiceProcessing$1.class
+VideoProcessor$1.class
+ImageProcessor.class
+VideoProcessor.class
