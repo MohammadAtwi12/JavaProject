@@ -120,49 +120,19 @@ public class MainGUI extends Application {
                     int blockArea = Math.max(1, imageArea / numBlocks);
                     int blockSize = (int) Math.ceil(Math.sqrt(blockArea));
 
-                    // --- Memory and CPU tracking for sequential ---
-                    long memSeqBefore = getUsedMemory();
-                    double cpuSeqBefore = getProcessCpuLoad();
                     long startSeq = System.currentTimeMillis();
                     VideoProcessor.processVideoInMemory(selectedFile.getAbsolutePath(), outputPath, filter, ImageProcessor.SEQUENTIAL, threads, blockSize);
                     long endSeq = System.currentTimeMillis() - startSeq;
-                    long memSeqAfter = getUsedMemory();
-                    double cpuSeqAfter = getProcessCpuLoad();
-                    long seqPeakMem = Math.max(memSeqBefore, memSeqAfter);
 
-                    // --- Memory and CPU tracking for parallel ---
-                    long memParBefore = getUsedMemory();
-                    double[] cpuSamples = new double[20];
-                    Thread cpuSampler = new Thread(() -> {
-                        for (int i = 0; i < cpuSamples.length; i++) {
-                            cpuSamples[i] = getProcessCpuLoad();
-                            try { Thread.sleep((long)(endSeq / (cpuSamples.length + 1))); } catch (InterruptedException ignored) {}
-                        }
-                    });
-                    cpuSampler.start();
                     long startPar = System.currentTimeMillis();
                     VideoProcessor.processVideoInMemory(selectedFile.getAbsolutePath(), outputPath, filter, method, threads, blockSize);
                     long endPar = System.currentTimeMillis() - startPar;
-                    long memParAfter = getUsedMemory();
-                    try { cpuSampler.join(); } catch (InterruptedException ignored) {}
-                    double cpuParMax = 0;
-                    for (double v : cpuSamples) cpuParMax = Math.max(cpuParMax, v);
-                    long parPeakMem = Math.max(memParBefore, memParAfter);
-                    double memRatio = parPeakMem / (double)seqPeakMem;
 
                     double speedup = (endSeq / 1000.0) / (endPar / 1000.0);
 
-                    long seqOverhead = seqPeakMem - memSeqBefore;
-                    long parOverhead = parPeakMem - memParBefore;
-                    String memWarn = parOverhead > 2 * seqOverhead ? "⚠️ Parallel memory overhead > 2x sequential!" : "";
-
                     resultLabel.setText(
-                        "✅ Video done\n" +
-                        "Speedup: " + df.format(speedup) + "x\n" +
-                        "Max CPU during parallel: " + df.format(cpuParMax * 100) + "%\n" +
-                        "Seq mem overhead: " + (seqOverhead / (1024 * 1024)) + " MB\n" +
-                        "Par mem overhead: " + (parOverhead / (1024 * 1024)) + " MB\n" +
-                        memWarn
+                        "Video done\n" +
+                        "Speedup: " + df.format(speedup) + "x\n"
                     );
                     // Show output video link
                     outputPreview.setImage(null);
@@ -185,26 +155,10 @@ public class MainGUI extends Application {
                     BufferedImage copy1 = deepCopy(original);
                     BufferedImage copy2 = deepCopy(original);
 
-                    // --- Memory and CPU tracking for sequential ---
-                    long memSeqBefore = getUsedMemory();
-                    double cpuSeqBefore = getProcessCpuLoad();
                     long t1s = System.nanoTime();
                     SequentialProcessing.applyFilter(filter, copy1);
                     long t1e = System.nanoTime();
-                    long memSeqAfter = getUsedMemory();
-                    double cpuSeqAfter = getProcessCpuLoad();
-                    long seqPeakMem = Math.max(memSeqBefore, memSeqAfter);
 
-                    // --- Memory and CPU tracking for parallel ---
-                    long memParBefore = getUsedMemory();
-                    double[] cpuSamples = new double[20];
-                    Thread cpuSampler = new Thread(() -> {
-                        for (int i = 0; i < cpuSamples.length; i++) {
-                            cpuSamples[i] = getProcessCpuLoad();
-                            try { Thread.sleep(10); } catch (InterruptedException ignored) {}
-                        }
-                    });
-                    cpuSampler.start();
                     long t2s;
                     long t2e;
                     if (method == ImageProcessor.FORKJOIN){
@@ -217,35 +171,23 @@ public class MainGUI extends Application {
                         ExecutorServiceProcessing.applyFilter(filter, copy2, threads, blockSize);
                         t2e = System.nanoTime();
                     }
-                    long memParAfter = getUsedMemory();
-                    try { cpuSampler.join(); } catch (InterruptedException ignored) {}
-                    double cpuParMax = 0;
-                    for (double v : cpuSamples) cpuParMax = Math.max(cpuParMax, v);
-                    long parPeakMem = Math.max(memParBefore, memParAfter);
-                    double memRatio = parPeakMem / (double)seqPeakMem;
 
                     double seqMs = (t1e - t1s) / 1e6;
                     double parMs = (t2e - t2s) / 1e6;
                     double speedup = seqMs / parMs;
 
-                    long seqOverhead = seqPeakMem - memSeqBefore;
-                    long parOverhead = parPeakMem - memParBefore;
-                    String memWarn = parOverhead > 2 * seqOverhead ? "⚠️ Parallel memory overhead > 2x sequential!" : "";
-
-                    outputPreview.setImage(SwingFXUtils.toFXImage(copy2, null));
+                    outputPreview.setImage(SwingFXUtils.toFXImage(copy1, null));
                     outputPreview.setFitWidth(350);
                     outputPreview.setPreserveRatio(true);
                     outputPreview.setSmooth(true);
                     outputPreview.setStyle("-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.6), 10, 0, 0, 0);");
-                    ImageIO.write(copy2, "jpg", new File("gui_output.jpg"));
+                    ImageIO.write(copy1, "jpg", new File("gui_output.jpg"));
 
                     resultLabel.setText(
-                        "✅ Image done\n" +
-                        "Speedup: " + df.format(speedup) + "x\n" +
-                        "Max CPU during parallel: " + df.format(cpuParMax * 100) + "%\n" +
-                        "Seq mem overhead: " + (seqOverhead / (1024 * 1024)) + " MB\n" +
-                        "Par mem overhead: " + (parOverhead / (1024 * 1024)) + " MB\n" +
-                        memWarn
+                        "Image done\n" +
+                        "Speedup: " + df.format(speedup) + "x    "+
+                        "Sequential Time: " +df.format(seqMs) +"ms    "+
+                        "Parallel Time: " +df.format(parMs) +"ms    "
                     );
                 }
             } catch (Exception ex) {
@@ -254,15 +196,15 @@ public class MainGUI extends Application {
         });
 
         VBox controls = new VBox(10,
-                new Label("🖼️ Filter Type:"), filterCombo,
-                new Label("⚙️ Processor Method:"), methodCombo,
-                new Label("🔢 Threads:"), threadInput,
+                new Label("Filter Type:"), filterCombo,
+                new Label("Processor Method:"), methodCombo,
+                new Label("Threads:"), threadInput,
                 fileButton, fileLabel, runButton, resultLabel);
         controls.setPadding(new Insets(10));
         controls.setAlignment(Pos.TOP_LEFT);
 
-        VBox leftBox = new VBox(10, new Label("📥 Input Preview"), inputPreview, inputVideoLink);
-        VBox rightBox = new VBox(10, new Label("📤 Output Preview"), outputPreview, outputVideoLink);
+        VBox leftBox = new VBox(10, new Label("Input Preview"), inputPreview, inputVideoLink);
+        VBox rightBox = new VBox(10, new Label("Output Preview"), outputPreview, outputVideoLink);
         leftBox.setAlignment(Pos.CENTER);
         rightBox.setAlignment(Pos.CENTER);
         inputVideoLink.setVisible(false);
